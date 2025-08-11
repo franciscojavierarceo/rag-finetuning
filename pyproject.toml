@@ -1,0 +1,9 @@
+[project]
+name = "rag-finetuning"
+version = "0.1.0"
+description = "Retrieval Augmented Generation Fine Tuning"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.8.0",
+]
