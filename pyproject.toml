@@ -5,5 +5,6 @@ description = "Retrieval Augmented Generation Fine Tuning"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "feast[milvus]>=0.51.0",
     "torch>=2.8.0",
 ]
