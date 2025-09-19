@@ -836,11 +836,11 @@ wheels = [
 
 [[package]]
 name = "marshmallow"
-version = "4.0.0"
+version = "3.10.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1e/ff/26df5a9f5ac57ccf693a5854916ab47243039d2aa9e0fe5f5a0331e7b74b/marshmallow-4.0.0.tar.gz", hash = "sha256:3b6e80aac299a7935cfb97ed01d1854fb90b5079430969af92118ea1b12a8d55", size = 220507 }
+sdist = { url = "https://files.pythonhosted.org/packages/9b/3a/9f586ba2932b17d89c11373f28d7350a09bf87a6274ef29a37605c996c1e/marshmallow-3.10.0.tar.gz", hash = "sha256:4ab2fdb7f36eb61c3665da67a7ce281c8900db08d72ba6bf0e695828253581f7", size = 172801 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d6/26/6cc45d156f44dbe1d5696d9e54042e4dcaf7b946c0b86df6a97d29706f32/marshmallow-4.0.0-py3-none-any.whl", hash = "sha256:e7b0528337e9990fd64950f8a6b3a1baabed09ad17a0dfb844d701151f92d203", size = 48420 },
+    { url = "https://files.pythonhosted.org/packages/eb/5c/d43fa372e77df6e9783a8e5f29c3cccf27b1f83f3b84d571a22a58509147/marshmallow-3.10.0-py2.py3-none-any.whl", hash = "sha256:eca81d53aa4aafbc0e20566973d0d2e50ce8bf0ee15165bb799bec0df1e50177", size = 46397 },
 ]
 
 [[package]]
@@ -1867,7 +1867,7 @@ requires-dist = [
     { name = "feast", extras = ["milvus"], specifier = ">=0.51.0" },
     { name = "ipython", specifier = ">=9.5.0" },
     { name = "kubeflow-sdk", specifier = ">=0.1.9" },
-    { name = "marshmallow", specifier = ">=4.0.0" },
+    { name = "marshmallow", specifier = "==3.10.0" },
     { name = "sentence-transformers", specifier = ">=5.1.0" },
     { name = "torch", specifier = ">=2.8.0" },
 ]

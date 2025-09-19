@@ -1,0 +1,20 @@
+project: ragfinetune
+provider: local
+registry: data/registry.db
+
+online_store:
+    type: milvus
+    path: data/online_store.db
+    port: 19530
+    vector_enabled: true
+    embedding_dim: 384
+    index_type: IVF_FLAT
+    metric_type: COSINE
+
+offline_store:
+  type: file
+
+entity_key_serialization_version: 3
+# By default, no_auth for authentication and authorization, other possible values kubernetes and oidc. Refer the documentation for more details.
+auth:
+    type: no_auth

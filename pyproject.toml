@@ -10,7 +10,7 @@ dependencies = [
     "feast[milvus]>=0.51.0",
     "ipython>=9.5.0",
     "kubeflow-sdk>=0.1.9",
-    "marshmallow>=4.0.0",
+    "marshmallow==3.10.0",
     "sentence-transformers>=5.1.0",
     "torch>=2.8.0",
 ]
