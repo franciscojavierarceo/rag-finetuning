@@ -5,6 +5,12 @@ description = "Retrieval Augmented Generation Fine Tuning"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "bigtree>=0.29.2",
+    "datasets==3.6.0",
     "feast[milvus]>=0.51.0",
+    "ipython>=9.5.0",
+    "kubeflow-sdk>=0.1.9",
+    "marshmallow>=4.0.0",
+    "sentence-transformers>=5.1.0",
     "torch>=2.8.0",
 ]
