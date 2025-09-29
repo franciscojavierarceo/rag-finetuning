@@ -11,7 +11,8 @@ wiki_passage = Entity(
     description="Unique ID of a Wikipedia passage",
 )
 
-parquet_file_path = "data/wiki_dpr.parquet"
+#parquet_file_path = "data/wiki_dpr.parquet"
+parquet_file_path = "data/train-00000-of-00157_sample.parquet"
 
 wiki_dpr_source = FileSource(
     name="wiki_dpr_source",

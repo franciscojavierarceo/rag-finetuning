@@ -803,16 +803,16 @@ wheels = [
 
 [[package]]
 name = "kubeflow"
-version = "0.1.0rc1"
+version = "0.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "kubeflow-trainer-api" },
     { name = "kubernetes" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/08/80/0f6989b5cc415ee3b21277f82329b2ca4a76730b16125983715b0b67834e/kubeflow-0.1.0rc1.tar.gz", hash = "sha256:f147f8f6fc9d3a2d7091693816083b51fe7c51cd915070ef80209aef85059e73", size = 617648 }
+sdist = { url = "https://files.pythonhosted.org/packages/50/7c/f976221c2bcbfb05d3a363248dfd83c16cbe69750192318e8b0bbbc26874/kubeflow-0.1.0.tar.gz", hash = "sha256:3f0a0c4a986a62ecd20ef0a19bde9ebbdda7efcb024f7ffd09670a762f9a637e", size = 619342 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d4/64/9241407eb1fd46184a0f9ee4ca67fadecfdb638fbe1417468713b4ede512/kubeflow-0.1.0rc1-py3-none-any.whl", hash = "sha256:9dda6c2bc6633870fc93c220abd4b7107eb0d23bbbe67f2af5c38576279392f6", size = 50950 },
+    { url = "https://files.pythonhosted.org/packages/d7/8c/98e4cb6c955e1fbae85c61c234020d45360010d43ab281011bedbb45eabb/kubeflow-0.1.0-py3-none-any.whl", hash = "sha256:8dd2f3a9e2848435c5d2f14932f0bde63c07d88f21e814a4b12b778236ab275e", size = 50919 },
 ]
 
 [[package]]
@@ -1978,7 +1978,7 @@ requires-dist = [
     { name = "datasets", specifier = "==3.6.0" },
     { name = "feast", extras = ["milvus"], specifier = ">=0.51.0" },
     { name = "ipython", specifier = ">=9.5.0" },
-    { name = "kubeflow", specifier = "==0.1.0rc1" },
+    { name = "kubeflow", specifier = "==0.1.0" },
     { name = "kubeflow-sdk", specifier = ">=0.1.9" },
     { name = "marshmallow", specifier = "==3.10.0" },
     { name = "sentence-transformers", specifier = ">=5.1.0" },

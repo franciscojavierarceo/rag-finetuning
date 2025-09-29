@@ -9,7 +9,7 @@ dependencies = [
     "datasets==3.6.0",
     "feast[milvus]>=0.51.0",
     "ipython>=9.5.0",
-    "kubeflow==0.1.0rc1",
+    "kubeflow==0.1.0",
     "kubeflow-sdk>=0.1.9",
     "marshmallow==3.10.0",
     "sentence-transformers>=5.1.0",
