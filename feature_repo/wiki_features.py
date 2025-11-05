@@ -5,14 +5,15 @@ from feast.data_format import ParquetFormat
 from feast.types import Array, Float32, String
 
 wiki_passage = Entity(
-    name="passage_id",
-    join_keys=["passage_id"],
+    name="id",
+    join_keys=["id"],
     value_type=ValueType.STRING,
     description="Unique ID of a Wikipedia passage",
 )
 
 #parquet_file_path = "data/wiki_dpr.parquet"
-parquet_file_path = "data/train-00000-of-00157_sample.parquet"
+#parquet_file_path = "data/train-00000-of-00157_sample_with_timestamp.parquet"
+parquet_file_path = "data/train-00000-of-00157_sample_with_timestamp_chunked.parquet"
 
 wiki_dpr_source = FileSource(
     name="wiki_dpr_source",
@@ -27,16 +28,16 @@ wiki_passage_feature_view = FeatureView(
     ttl=timedelta(days=1),
     schema=[
         Field(
-            name="passage_text",
+            name="text",
             dtype=String,
             description="Content of the Wikipedia passage",
         ),
         Field(
-            name="embedding",
+            name="embeddings",
             dtype=Array(Float32),
             description="vectors",
             vector_index=True,
-            vector_length=384,
+            vector_length=768,
             vector_search_metric="COSINE",
         ),
     ],

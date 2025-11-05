@@ -4,10 +4,11 @@ registry: data/registry.db
 
 online_store:
     type: milvus
-    path: data/online_store.db
+    # path: data/online_store.db
+    host: http://127.0.0.1
     port: 19530
     vector_enabled: true
-    embedding_dim: 384
+    embedding_dim: 768
     index_type: IVF_FLAT
     metric_type: COSINE
 
