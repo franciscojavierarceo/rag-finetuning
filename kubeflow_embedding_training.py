@@ -181,8 +181,8 @@ def hybrid_embedding_training(func_args):
     # Evaluation dataloader (no distributed sampling needed for eval)
     eval_dataloader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=False)
 
-    # Training loss - MultipleNegativesRankingLoss for in-batch negatives
-    train_loss = losses.MultipleNegativesRankingLoss(model=model)
+    # Training loss - ContrastiveLoss to pull positives closer and push negatives apart
+    train_loss = losses.ContrastiveLoss(model=model)
 
     # Function to update hard negatives periodically
     def update_hard_negatives_dynamic():
@@ -268,6 +268,7 @@ def hybrid_embedding_training(func_args):
         if rank == 0:
             print(f"\n🚀 STARTING EPOCH {epoch + 1}/{epochs}")
             print(f"Learning Rate: {learning_rate}, Batch Size: {batch_size}")
+            print(f"Loss Function: ContrastiveLoss (pulls positives closer, pushes negatives apart)")
             logger.info(f"Starting epoch {epoch + 1}/{epochs}")
 
         # Update hard negatives periodically
@@ -413,13 +414,15 @@ def hybrid_embedding_training(func_args):
         # Save training info
         training_info = {
             'base_model': model_name,
+            'loss_function': 'ContrastiveLoss',
             'epochs': epochs,
             'batch_size': batch_size,
             'learning_rate': learning_rate,
             'world_size': world_size,
             'training_stats': training_stats,
             'output_path': str(output_dir),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'improvements': 'Ultra-low LR (1e-6) + ContrastiveLoss to increase positive similarities'
         }
 
         with open(output_dir / 'training_info.json', 'w') as f:
@@ -429,12 +432,15 @@ def hybrid_embedding_training(func_args):
         print(f"\n🎉 TRAINING COMPLETED!")
         print(f"{'='*60}")
         print(f"📁 Model saved to: {output_dir}")
-        print(f"📊 Training Statistics:")
+        print(f"🔧 Training Configuration:")
+        print(f"   - Loss function: ContrastiveLoss (designed to increase positive similarities)")
+        print(f"   - Learning rate: {learning_rate} (ultra-conservative)")
+        print(f"   - Batch size: {batch_size}")
         print(f"   - Total epochs: {training_stats['epochs_completed']}")
+        print(f"📊 Training Results:")
         print(f"   - Hard negative updates: {training_stats['hard_negative_updates']}")
         print(f"   - Final score: {final_score:.4f}")
-        print(f"   - Learning rate: {learning_rate}")
-        print(f"   - Batch size: {batch_size}")
+        print(f"💡 Expected: Positive similarities should INCREASE, negatives should DECREASE")
         print(f"{'='*60}")
 
         logger.info(f"Model saved to {output_dir}")
@@ -474,9 +480,9 @@ if __name__ == "__main__":
             func=hybrid_embedding_training,
             func_args={
                 "model_name": "all-MiniLM-L6-v2",
-                "epochs": "8",
+                "epochs": "200",
                 "batch_size": "16",
-                "learning_rate": "1e-5",
+                "learning_rate": "2e-6",
                 "max_samples": "200",  # Small for testing
                 "feast_repo_path": "feature_repo",
                 "hard_negative_update_frequency": "3"
