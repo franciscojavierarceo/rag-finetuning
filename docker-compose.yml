@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # Local Docker Registry
+  registry:
+    image: registry:2
+    container_name: rag-registry
+    ports:
+      - "5001:5000"
+    restart: always
+    volumes:
+      - registry-data:/var/lib/registry
+    networks:
+      - rag-network
+
+  # Training Service
+  embedding-training:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-training
+    depends_on:
+      - registry
+    environment:
+      - PROJECT_DIR=/workspace
+      - PYTHONPATH=/workspace
+      - PYTHONUNBUFFERED=1
+      - DEVELOPMENT_MODE=true
+      - LOG_LEVEL=DEBUG
+      # Training parameters
+      - MODEL_NAME=all-MiniLM-L6-v2
+      - EPOCHS=5
+      - BATCH_SIZE=8
+      - LEARNING_RATE=2e-6
+      - MAX_SAMPLES=100
+      - FEAST_REPO_PATH=feature_repo
+      - HARD_NEGATIVE_UPDATE_FREQUENCY=2
+    volumes:
+      # Mount project directory
+      - .:/workspace
+      # Mount data volumes
+      - training-data:/workspace/feature_repo/data
+      - model-outputs:/workspace/fine_tuned_kubeflow_embeddings
+      - tensorboard-logs:/workspace/tensorboard_logs
+    working_dir: /workspace
+    command: python kubeflow_embedding_training.py
+    networks:
+      - rag-network
+
+  # TensorBoard Service
+  tensorboard:
+    image: tensorflow/tensorflow:latest
+    container_name: rag-tensorboard
+    ports:
+      - "6006:6006"
+    volumes:
+      - tensorboard-logs:/logs
+    command: >
+      bash -c "
+        tensorboard --logdir=/logs --host=0.0.0.0 --port=6006 --reload_interval=10
+      "
+    depends_on:
+      - embedding-training
+    networks:
+      - rag-network
+
+  # Debug/Development Container
+  debug:
+    image: busybox
+    container_name: rag-debug
+    command: sleep infinity
+    volumes:
+      - .:/workspace
+      - training-data:/data/training
+      - model-outputs:/data/models
+      - tensorboard-logs:/data/logs
+    networks:
+      - rag-network
+
+volumes:
+  registry-data:
+  training-data:
+  model-outputs:
+  tensorboard-logs:
+
+networks:
+  rag-network:
+    driver: bridge

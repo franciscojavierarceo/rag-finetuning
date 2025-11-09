@@ -85,12 +85,12 @@ def hybrid_embedding_training(func_args):
     # Initialize TensorBoard writer (only on rank 0)
     writer = None
     if rank == 0:
-        # Use absolute path to ensure logs persist after Kubeflow job completion
-        project_dir = "/Users/farceo/dev/rag-finetuning"
+        # Dynamic project directory - works in local, Docker, and Kubernetes environments
+        project_dir = func_args.get('project_dir') or os.environ.get('PROJECT_DIR') or os.getcwd()
         log_dir = f"{project_dir}/tensorboard_logs/embedding_training_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(log_dir), exist_ok=True)
+        os.makedirs(log_dir, exist_ok=True)
 
         writer = SummaryWriter(log_dir)
         logger.info(f"TensorBoard logging to: {log_dir}")
@@ -137,14 +137,18 @@ def hybrid_embedding_training(func_args):
                 label=1.0 if row['label'] == 'positive' else 0.0
             )
 
-    # Load training dataset - use absolute path since Kubeflow runs in isolated environment
+    # Load training dataset - use dynamic paths that work in any environment
     import os
-    current_dir = os.getcwd()
-    # Look for training data in the original working directory
+    # Use the same dynamic project directory approach
+    project_dir = func_args.get('project_dir') or os.environ.get('PROJECT_DIR') or os.getcwd()
+
+    # Look for training data in multiple locations (local, container, K8s)
     potential_paths = [
         f"{feast_repo_path}/data/embedding_training_data.parquet",
-        f"/Users/farceo/dev/rag-finetuning/{feast_repo_path}/data/embedding_training_data.parquet",
-        "/Users/farceo/dev/rag-finetuning/feature_repo/data/embedding_training_data.parquet"
+        f"{project_dir}/{feast_repo_path}/data/embedding_training_data.parquet",
+        f"{project_dir}/feature_repo/data/embedding_training_data.parquet",
+        "./feature_repo/data/embedding_training_data.parquet",  # Relative path fallback
+        "/data/embedding_training_data.parquet"  # Container mount point
     ]
 
     training_data_path = None
@@ -406,8 +410,10 @@ def hybrid_embedding_training(func_args):
 
     # Save final model (only from rank 0)
     if rank == 0:
-        output_dir = Path("./fine_tuned_kubeflow_embeddings")
-        output_dir.mkdir(exist_ok=True)
+        # Use dynamic project directory for consistent model saving
+        project_dir = func_args.get('project_dir') or os.environ.get('PROJECT_DIR') or os.getcwd()
+        output_dir = Path(f"{project_dir}/fine_tuned_kubeflow_embeddings")
+        output_dir.mkdir(exist_ok=True, parents=True)
 
         model.save(str(output_dir))
 

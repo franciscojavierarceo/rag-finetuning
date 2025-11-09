@@ -1,6 +1,6 @@
 # RAG Embedding Fine-tuning with Feast and Kubeflow
 
-A complete pipeline for fine-tuning embedding models for Retrieval-Augmented Generation (RAG) systems using Feast for data management and Kubeflow for distributed training.
+A complete pipeline for fine-tuning embedding models for Retrieval-Augmented Generation (RAG) systems using Feast for data management and Kubeflow for distributed training. Now with **Docker-based local development** for reliable cross-platform training.
 
 ## 🎯 Overview
 
@@ -9,6 +9,8 @@ This project implements a hybrid approach to embedding fine-tuning that:
 - Implements **dynamic hard negative sampling** during training
 - Leverages **Kubeflow trainer** for distributed PyTorch training
 - Provides **TensorBoard monitoring** for training metrics
+- **Docker containerization** for reliable local and cloud deployment
+- **Dynamic path resolution** for Kubernetes environments
 - Integrates seamlessly with existing **Feast RAG pipelines**
 
 ## 🏗️ Architecture
@@ -31,53 +33,138 @@ This project implements a hybrid approach to embedding fine-tuning that:
 
 - Python 3.11+
 - UV package manager
+- Docker (for containerized training)
 - Kubeflow SDK 2.1.0+
 - 8GB+ RAM (for model training)
 
 ## 🚀 Quick Start
 
-### Step 1: Prepare Training Data
+### Option A: Simple Docker Training (Recommended)
 
-Generate labeled training pairs (positive/negative/hard negative) from your source data:
+The fastest way to get started with reliable containerized training:
 
 ```bash
-# Generate training data with positive, negative, and hard negative pairs
+# 1. Prepare training data
 uv run prepare_training_data.py \
     --source-data feature_repo/data/train-00000-of-00157_sample_with_timestamp_chunked.parquet \
     --output-dir feature_repo/data \
     --hard-negatives-per-query 2 \
     --random-negative-ratio 0.3
+
+# 2. Build training image and run everything
+./simple-docker.sh all
 ```
 
-**Output:**
+This will:
+✅ Build Docker training image
+✅ Start local registry
+✅ Start TensorBoard
+✅ Run complete training pipeline
+✅ Open TensorBoard at http://localhost:6006
+
+### Option B: Docker Compose (Advanced)
+
+For more complex setups with persistent volumes:
+
+```bash
+# Setup all services
+./docker-run.sh setup
+
+# Run training
+./docker-run.sh train
+
+# Open TensorBoard
+./docker-run.sh tensorboard
+```
+
+### Option C: Kubernetes Distributed Training (Production)
+
+For distributed training using KIND cluster with Kubeflow Trainer operator:
+
+```bash
+# 1. Prepare training data
+uv run prepare_training_data.py \
+    --source-data feature_repo/data/train-00000-of-00157_sample_with_timestamp_chunked.parquet \
+    --output-dir feature_repo/data \
+    --hard-negatives-per-query 2 \
+    --random-negative-ratio 0.3
+
+# 2. Setup KIND cluster with Kubeflow Trainer
+./setup-kind-kubeflow.sh all
+
+# 3. Deploy distributed training
+./deploy-kubeflow-training.sh deploy
+
+# 4. Monitor training progress
+kubectl logs -f -l trainer.kubeflow.org/trainjob-ancestor-step=trainer
+```
+
+This will:
+✅ Create KIND cluster with 3 nodes (1 control-plane, 2 workers)
+✅ Install Kubeflow Trainer operator v2.1.0
+✅ Deploy distributed PyTorch training (2 nodes)
+✅ Run training with dynamic hard negative sampling
+✅ Save models and logs to local filesystem
+
+### Option D: Native Local Training
+
+For development without Docker or Kubernetes (direct Python execution):
+
+```bash
+# 1. Prepare training data with custom parameters
+uv run prepare_training_data.py \
+    --source-data feature_repo/data/train-00000-of-00157_sample_with_timestamp_chunked.parquet \
+    --output-dir feature_repo/data \
+    --base-model sentence-transformers/all-MiniLM-L6-v2 \
+    --hard-negatives-per-query 3 \
+    --random-negative-ratio 0.3
+
+# 2. Run hybrid embedding training locally
+uv run kubeflow_embedding_training.py
+
+# 3. Start TensorBoard for monitoring (in separate terminal)
+uv run tensorboard --logdir=tensorboard_logs --host=0.0.0.0 --port=6006
+
+# 4. Open TensorBoard in browser
+open http://localhost:6006
+```
+
+**Advanced Local Training Options:**
+
+```bash
+# For longer training with more epochs (recommended for best results)
+# Edit kubeflow_embedding_training.py to modify:
+# func_args = {
+#     "model_name": "all-MiniLM-L6-v2",
+#     "epochs": "20",                    # Increase epochs for better convergence
+#     "batch_size": "16",               # Larger batch size for stability
+#     "learning_rate": "2e-6",          # Ultra-low LR for ContrastiveLoss
+#     "max_samples": None,              # Use full dataset (remove limit)
+#     "hard_negative_update_frequency": "3"  # Update negatives every 3 epochs
+# }
+
+# Alternative models to try:
+# "sentence-transformers/all-mpnet-base-v2"           # Larger, more powerful
+# "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"  # Multilingual
+```
+
+This will:
+✅ Run complete hybrid training pipeline locally
+✅ Generate dynamic hard negatives during training
+✅ Use ContrastiveLoss for optimal positive similarity learning
+✅ Save fine-tuned model to `fine_tuned_kubeflow_embeddings/`
+✅ Log detailed metrics to TensorBoard
+✅ Work on any machine with Python 3.11+ and UV
+
+### Training Output
+
+**Generated Files:**
 - `feature_repo/data/embedding_training_data.parquet` - Main training dataset
 - `feature_repo/data/query_embeddings.parquet` - Query embeddings for dynamic sampling
+- `fine_tuned_kubeflow_embeddings/` - Fine-tuned model
+- `tensorboard_logs/` - Training metrics and logs
 
-### Step 2: Run Kubeflow Fine-tuning
-
-Execute the complete fine-tuning pipeline with distributed training:
-
-```bash
-# Run embedding fine-tuning with Kubeflow trainer
-uv run kubeflow_embedding_training.py
-```
-
-**This will:**
-- Load training data from Feast offline store
-- Fine-tune `all-MiniLM-L6-v2` using hybrid negative sampling
-- Update hard negatives every 3 epochs
-- Log metrics to TensorBoard
-- Save the fine-tuned model
-
-### Step 3: Monitor Training
-
-Open TensorBoard to monitor training progress:
-
-```bash
-tensorboard --logdir=./tensorboard_logs
-```
-
-**Available Metrics:**
+**TensorBoard Metrics:**
 - `Evaluation/Positive_Pair_Similarity` - Model performance on positive pairs
 - `Hard_Negatives/New_Pairs_Added` - Dynamic negative sampling activity
 - `Dataset/*_count` - Training dataset composition over time
@@ -87,8 +174,17 @@ tensorboard --logdir=./tensorboard_logs
 ```
 rag-finetuning/
 ├── README.md                              # This file
+├── requirements.txt                       # Python dependencies
+├── Dockerfile                            # Container build configuration
+├── docker-compose.yml                    # Docker Compose services
+│
 ├── prepare_training_data.py               # Generate training data
-├── kubeflow_embedding_training.py         # Main training script
+├── kubeflow_embedding_training.py         # Main training script (dynamic paths)
+│
+├── simple-docker.sh                      # Simple Docker training (recommended)
+├── docker-run.sh                         # Docker Compose wrapper
+├── build-and-deploy.sh                   # Local deployment script
+│
 ├── feature_repo/
 │   ├── wiki_features.py                   # Feast feature definitions (inference)
 │   ├── training_data_features.py          # Training data feature definitions
@@ -96,9 +192,29 @@ rag-finetuning/
 │       ├── train-00000-of-00157_*.parquet # Source data
 │       ├── embedding_training_data.parquet # Training pairs
 │       └── query_embeddings.parquet       # Query embeddings
+│
 ├── tensorboard_logs/                      # TensorBoard logs
 └── fine_tuned_kubeflow_embeddings/        # Output models
 ```
+
+### 🐳 Docker & Kubernetes Files
+
+**Essential for Local Development:**
+- `simple-docker.sh` - **Recommended**: Single-command Docker training
+- `docker-run.sh` - Docker Compose with persistent volumes
+- `Dockerfile` - Container build configuration
+- `docker-compose.yml` - Multi-service setup
+- `requirements.txt` - Python dependencies with pinned versions
+
+**Production Kubernetes Training (Distributed):**
+- `setup-kind-kubeflow.sh` - **Working**: KIND cluster with Kubeflow Trainer operator
+- `deploy-kubeflow-training.sh` - **Working**: Deploy distributed training to Kubernetes
+- `setup-kind-cluster.sh` - Legacy KIND setup (deprecated)
+- `quick-start.sh` - All-in-one KIND setup (deprecated)
+- `local-deploy.sh` - Legacy deployment scripts
+
+**Legacy/Optional:**
+- `standalone_embed.sh` - Milvus setup (optional vector DB)
 
 ## ⚙️ Configuration Options
 
@@ -252,31 +368,120 @@ fs.write_to_online_store("your_feature_view", df)
 
 ## 🐛 Troubleshooting
 
+### Docker Issues
+
+1. **TensorBoard not accessible at localhost:6006**
+   ```bash
+   # Stop Docker TensorBoard (often has architecture issues)
+   docker stop rag-tensorboard && docker rm rag-tensorboard
+
+   # Use native TensorBoard instead
+   uv run tensorboard --logdir=tensorboard_logs --host=0.0.0.0 --port=6006
+   ```
+
+2. **KIND cluster kubelet issues (macOS)**
+   ```
+   Error: timed out waiting for node kind-worker to be ready
+   Solution: Use Docker-based training instead (more reliable)
+   ./simple-docker.sh all
+   ```
+
+3. **Docker container name conflicts**
+   ```bash
+   # Error: container name already in use
+   docker stop rag-tensorboard rag-training rag-registry
+   docker rm rag-tensorboard rag-training rag-registry
+   ```
+
+4. **Architecture mismatch warnings (Apple Silicon)**
+   ```
+   WARNING: platform (linux/amd64) does not match detected host platform (linux/arm64/v8)
+   # This is expected and usually works fine, or use native training
+   ```
+
+### Native Local Training Issues
+
+1. **ModuleNotFoundError or ImportError**
+   ```bash
+   # Install dependencies with UV
+   uv sync
+
+   # Or install manually if UV isn't working
+   pip install -r requirements.txt
+   ```
+
+2. **Training data not found**
+   ```bash
+   # Make sure you generated training data first
+   uv run prepare_training_data.py \
+       --source-data feature_repo/data/train-00000-of-00157_sample_with_timestamp_chunked.parquet \
+       --output-dir feature_repo/data
+
+   # Verify the file exists
+   ls -la feature_repo/data/embedding_training_data.parquet
+   ```
+
+3. **CUDA out of memory (if using GPU)**
+   ```python
+   # Edit kubeflow_embedding_training.py and reduce batch size:
+   func_args = {
+       "batch_size": "8",  # Reduce from 16 to 8
+       # ... other parameters
+   }
+   ```
+
+4. **Positive similarities decreasing instead of increasing**
+   ```bash
+   # This is fixed in the current version using ContrastiveLoss
+   # Check TensorBoard at http://localhost:6006
+   # Look for "Evaluation/positive_similarity" - should increase over epochs
+   ```
+
+5. **TensorBoard not showing metrics**
+   ```bash
+   # Make sure TensorBoard is pointing to correct log directory
+   uv run tensorboard --logdir=tensorboard_logs --host=0.0.0.0 --port=6006
+
+   # Check if logs directory exists and has content
+   ls -la tensorboard_logs/
+   ```
+
+6. **Training taking too long**
+   ```python
+   # For faster testing, edit kubeflow_embedding_training.py:
+   func_args = {
+       "epochs": "5",        # Reduce epochs for testing
+       "max_samples": "100", # Limit dataset size
+       "batch_size": "32",   # Increase batch size if you have memory
+   }
+   ```
+
 ### Common Issues
 
-1. **ImportError: cannot import name 'TrainJobTemplate'**
+5. **ImportError: cannot import name 'TrainJobTemplate'**
    ```
    Solution: Using correct Kubeflow SDK API (v2.1.0+)
    ```
 
-2. **FileNotFoundError: Training data not found**
+6. **FileNotFoundError: Training data not found**
    ```bash
    # Run data preparation first
    uv run prepare_training_data.py --source-data your_data.parquet
    ```
 
-3. **CUDA out of memory**
+7. **CUDA out of memory**
    ```python
    # Reduce batch size in training config
    "batch_size": "8",  # Instead of 16
    ```
 
-4. **TensorBoard not showing metrics**
+8. **Training job exits immediately**
    ```bash
-   # Check log directory exists
-   ls tensorboard_logs/
-   # Start TensorBoard with correct path
-   tensorboard --logdir=./tensorboard_logs --port 6006
+   # Check if training data exists
+   ls feature_repo/data/embedding_training_data.parquet
+
+   # Check logs for errors
+   docker logs rag-training
    ```
 
 ### Debugging Training
@@ -324,6 +529,54 @@ Modify training loss in `kubeflow_embedding_training.py`:
 from sentence_transformers import losses
 train_loss = losses.CosineSimilarityLoss(model=model)  # Alternative loss
 ```
+
+### Native Local Training Performance Tips
+
+**Optimal Configuration for Local Training:**
+
+```python
+# Edit kubeflow_embedding_training.py for best local performance
+func_args = {
+    "model_name": "all-MiniLM-L6-v2",    # Good balance of speed and quality
+    "epochs": "50",                       # More epochs for convergence
+    "batch_size": "32",                   # Increase if you have sufficient RAM/GPU
+    "learning_rate": "2e-6",              # Ultra-low LR proven to work
+    "max_samples": None,                  # Use full dataset for best results
+    "hard_negative_update_frequency": "5" # Update every 5 epochs for efficiency
+}
+```
+
+**Hardware Recommendations:**
+- **RAM**: 8GB+ recommended (16GB+ for larger datasets)
+- **GPU**: Optional but speeds up training significantly
+- **Storage**: SSD recommended for faster data loading
+- **CPU**: 4+ cores for efficient processing
+
+**Training Time Estimates (on typical hardware):**
+- **Small dataset (100 samples)**: 5-10 minutes
+- **Medium dataset (1000 samples)**: 30-60 minutes
+- **Full dataset (5000+ samples)**: 2-4 hours
+
+**Memory Optimization:**
+```python
+# If running out of memory, try these settings:
+func_args = {
+    "batch_size": "8",          # Reduce batch size
+    "max_samples": "1000",      # Limit dataset size
+    "learning_rate": "1e-6",    # Can use even lower LR with smaller batches
+}
+```
+
+**Monitoring Best Practices:**
+1. **Always run TensorBoard**: `uv run tensorboard --logdir=tensorboard_logs --host=0.0.0.0 --port=6006`
+2. **Watch positive similarity**: Should increase from ~0.6 to 0.85+ over training
+3. **Monitor hard negative updates**: Should see periodic spikes in "Hard_Negatives/New_Pairs_Added"
+4. **Check dataset growth**: Total dataset size should increase with hard negative updates
+
+**Expected Results:**
+- **Positive similarity**: 0.85-0.89 (excellent), 0.80-0.84 (good), <0.80 (needs more training)
+- **Training progression**: Should see steady improvement over first 20-50 epochs
+- **Model saturation**: Performance typically plateaus around 150-200 epochs
 
 ## 📚 Additional Resources
 
