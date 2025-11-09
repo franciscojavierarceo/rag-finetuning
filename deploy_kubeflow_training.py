@@ -364,7 +364,7 @@ def main():
 
     print("\n🎯 When training completes, find your model in:")
     print("   📁 ./fine_tuned_kubeflow_embeddings/")
-    print("   📈 ./tensorboard_logs/"))
+    print("   📈 ./tensorboard_logs/")
 
 
 if __name__ == "__main__":
