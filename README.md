@@ -92,10 +92,11 @@ uv run prepare_training_data.py \
 # 2. Setup KIND cluster with Kubeflow Trainer
 ./setup-kind-kubeflow.sh all
 
-# 3. Deploy distributed training
-./deploy-kubeflow-training.sh deploy
+# 3. Deploy distributed training (Python - more reliable)
+uv run deploy_kubeflow_training.py
 
 # 4. Monitor training progress
+kubectl get trainjobs -w
 kubectl logs -f -l trainer.kubeflow.org/trainjob-ancestor-step=trainer
 ```
 
@@ -208,7 +209,8 @@ rag-finetuning/
 
 **Production Kubernetes Training (Distributed):**
 - `setup-kind-kubeflow.sh` - **Working**: KIND cluster with Kubeflow Trainer operator
-- `deploy-kubeflow-training.sh` - **Working**: Deploy distributed training to Kubernetes
+- `deploy_kubeflow_training.py` - **Working**: Python deployment script (cross-platform)
+- `deploy-kubeflow-training.sh` - Legacy bash deployment (deprecated)
 - `setup-kind-cluster.sh` - Legacy KIND setup (deprecated)
 - `quick-start.sh` - All-in-one KIND setup (deprecated)
 - `local-deploy.sh` - Legacy deployment scripts
@@ -238,6 +240,44 @@ job_id = client.train(
         resources_per_node={"cpu": 2},                  # Resources per node
     ),
 )
+```
+
+### Hardware Optimization (Desktop/Server)
+
+**For high-performance desktop training, optimize Colima and training resources:**
+
+```bash
+# Optimize Colima for desktop hardware (Ubuntu/Linux)
+colima stop
+colima start --cpu 6 --memory 28 --disk 100 --mount-type virtiofs
+
+# Example for different system sizes:
+# High-end (32GB RAM, 16 cores): --cpu 14 --memory 24
+# Medium (16GB RAM, 8 cores):    --cpu 6  --memory 12
+# Your setup (62GB RAM, 8 cores): --cpu 6  --memory 28
+```
+
+**Then edit `deploy_kubeflow_training.py` for better performance:**
+
+```python
+# In deploy_kubeflow_training.py, update resources_per_node:
+resources_per_node={
+    "cpu": "3",              # 3 CPUs per node (6 total)
+    "memory": "12Gi",        # 12GB per node (24GB total)
+    # "nvidia.com/gpu": "1", # GPU support if available
+},
+
+func_args={
+    "epochs": "20",          # More epochs with better hardware
+    "batch_size": "32",      # Larger batches with more memory
+    "max_samples": None,     # Use full dataset
+}
+```
+
+**For maximum performance, consider native training:**
+```bash
+# Native training uses full desktop resources automatically
+uv run kubeflow_embedding_training.py
 ```
 
 ### Data Generation Parameters

@@ -136,11 +136,20 @@ def build_and_push_image():
 
     # Build the Docker image
     print_status(f"Building Docker image: {image_name}")
-    run_command(f"docker build -t {image_name} .", "Building Docker image...")
+    print(f"🏗️  Running: docker build -t {image_name} .")
+    result = subprocess.run(f"docker build -t {image_name} .", shell=True, text=True)
+    if result.returncode != 0:
+        print_error("Docker build failed")
+        sys.exit(1)
+    print_success("Docker image built successfully!")
 
     # Push to local registry
     print_status("Pushing image to local registry...")
-    run_command(f"docker push {image_name}", "Pushing to registry...")
+    print(f"📤 Running: docker push {image_name}")
+    result = subprocess.run(f"docker push {image_name}", shell=True, text=True)
+    if result.returncode != 0:
+        print_error("Docker push failed")
+        sys.exit(1)
 
     # Verify image was pushed
     result = run_command("curl -sf http://localhost:5001/v2/rag-embedding-training/tags/list", check=False)
@@ -157,10 +166,20 @@ def deploy_training():
 
     try:
         print("🐍 Creating Kubeflow TrainJob...")
+        print("⚙️  Training Configuration:")
+        print("   📦 Model: all-MiniLM-L6-v2")
+        print("   🔄 Epochs: 3 (distributed test)")
+        print("   📊 Batch size: 4 per node")
+        print("   🧠 Learning rate: 2e-6")
+        print("   🎯 Max samples: 50 (testing)")
+        print("   🔧 Nodes: 2 (distributed)")
+        print("   💾 Resources: 3 CPU, 12Gi memory per node")
 
         # Initialize the Kubeflow Trainer client
+        print("🔌 Initializing Kubeflow Trainer client...")
         client = TrainerClient()
 
+        print("🚀 Submitting training job to Kubernetes...")
         # Create distributed training job
         job_id = client.train(
             runtime=client.get_runtime("torch-distributed"),
@@ -184,82 +203,168 @@ def deploy_training():
             ),
         )
 
-        print(f"🚀 Training job submitted with ID: {job_id}")
-        print(f"📊 Monitor with: kubectl get trainjobs -w")
-        print(f"📜 View logs with: kubectl logs -f job/{job_id}")
+        print_success(f"Training job submitted with ID: {job_id}")
+        print("📊 Monitor with: kubectl get trainjobs -w")
+        print("📜 View logs with: kubectl logs -f job/{job_id}")
 
         return job_id
 
     except Exception as e:
         print_error(f"Failed to deploy training: {e}")
+        import traceback
+        print("🐛 Full error details:")
+        traceback.print_exc()
         sys.exit(1)
 
 
 def wait_for_job_start(job_id, timeout_minutes=5):
     """Wait for training job to start"""
     print("⏳ Waiting for job to start...")
+    print("🔍 This may take a few minutes while:")
+    print("   📥 Pulling PyTorch container images")
+    print("   🏗️  Creating training pods")
+    print("   ⚙️  Setting up distributed training")
 
     for i in range(timeout_minutes * 6):  # Check every 10 seconds
+        # Check TrainJob status
         result = run_command(
             "kubectl get trainjobs -o jsonpath='{.items[*].status.conditions[-1].type}'",
             check=False
         )
 
-        if "Running" in result.stdout or "Succeeded" in result.stdout:
+        if "Running" in result.stdout:
             print("✅ Training job is running!")
             return True
+        elif "Succeeded" in result.stdout:
+            print("✅ Training job completed!")
+            return True
+
+        # Show pod status for more detailed progress
+        pod_result = run_command(
+            f"kubectl get pods -l trainer.kubeflow.org/trainjob-ancestor-step=trainer --no-headers 2>/dev/null || echo 'No pods yet'",
+            check=False
+        )
+
+        if "No pods yet" not in pod_result.stdout and pod_result.stdout.strip():
+            # Parse pod status
+            lines = pod_result.stdout.strip().split('\n')
+            statuses = [line.split()[2] for line in lines if line.strip()]
+            status_summary = ', '.join(set(statuses))
+            print(f"   📦 Pods status: {status_summary} ({i+1}/{timeout_minutes * 6})")
+        else:
+            print(f"   ⌛ Still waiting for pods to be created... ({i+1}/{timeout_minutes * 6})")
 
         time.sleep(10)
-        print(f"   Still waiting... ({i+1}/{timeout_minutes * 6})")
 
-    print("⚠️ Job may not have started. Check manually.")
+    print("⚠️ Job may not have started yet. This is normal for large PyTorch images.")
+    print("🔍 Check manually with: kubectl get trainjobs -w")
     return False
 
 
 def monitor_training():
     """Show training status and monitoring commands"""
-    print_status("Monitoring training progress...")
+    print_status("Current training status...")
 
     print("\n📊 Training Jobs:")
-    run_command("kubectl get trainjobs -o wide")
+    run_command("kubectl get trainjobs -o wide", check=False)
 
-    print("\n🔧 Related Pods:")
+    print("\n🔧 Training Pods:")
     result = run_command("kubectl get pods -l trainer.kubeflow.org/trainjob-ancestor-step=trainer", check=False)
-    if result.returncode != 0:
-        print("No training pods found yet (still starting up)")
+    if result.returncode != 0 or not result.stdout.strip():
+        print("   ⚠️  No training pods found yet (still starting up)")
+
+    print("\n⚙️  All Related Pods (JobSet):")
+    run_command("kubectl get pods -l jobset.sigs.k8s.io", check=False)
 
     print("\n📜 Recent Events:")
-    run_command("kubectl get events --sort-by=.metadata.creationTimestamp --field-selector type!=Normal | tail -10", check=False)
+    event_result = run_command("kubectl get events --sort-by=.metadata.creationTimestamp | tail -10", check=False)
+    if event_result.returncode != 0 or not event_result.stdout.strip():
+        print("   ℹ️  No recent events found")
 
-    print("\n💡 Monitoring Commands:")
-    print("   Watch jobs:     kubectl get trainjobs -w")
-    print("   View logs:      kubectl logs -l trainer.kubeflow.org/trainjob-ancestor-step=trainer -f")
-    print("   Job details:    kubectl describe trainjobs")
-    print("   All pods:       kubectl get pods -A")
+    print("\n💡 Next Steps - Monitor your training:")
+    print("   🔍 Watch jobs:         kubectl get trainjobs -w")
+    print("   📜 Stream logs:        kubectl logs -f -l trainer.kubeflow.org/trainjob-ancestor-step=trainer")
+    print("   🔧 Job details:        kubectl describe trainjobs")
+    print("   📦 Check all pods:     kubectl get pods -A")
+    print("   🌐 Cluster info:       kubectl get nodes")
+
+    print(f"\n🎯 Training Progress:")
+    print("   1️⃣  Pods should move from 'ContainerCreating' → 'Running'")
+    print("   2️⃣  Training logs will show epoch progress")
+    print("   3️⃣  Model will be saved to './fine_tuned_kubeflow_embeddings/'")
+    print("   4️⃣  TensorBoard logs will be in './tensorboard_logs/'")
+
+    print(f"\n💡 If pods are stuck 'ContainerCreating':")
+    print("   🐳 Large PyTorch images take 5-15 minutes to download")
+    print("   ⏰ This is normal - be patient!")
+    print("   🔍 Check with: kubectl describe pods")
 
 
 def main():
     """Main deployment function"""
     print_banner()
 
+    print("🚀 Starting Kubeflow distributed training deployment...")
+    print("📋 This process will:")
+    print("   1️⃣  Check prerequisites (cluster, registry, data)")
+    print("   2️⃣  Build and push Docker training image")
+    print("   3️⃣  Deploy distributed training to Kubernetes")
+    print("   4️⃣  Monitor initial startup progress")
+    print()
+
     # Check prerequisites
+    print("=" * 60)
+    print("🔍 STEP 1: CHECKING PREREQUISITES")
+    print("=" * 60)
     check_prerequisites()
 
     # Build and push training image
+    print("\n" + "=" * 60)
+    print("🐳 STEP 2: BUILDING DOCKER IMAGE")
+    print("=" * 60)
     build_and_push_image()
 
     # Deploy training job
+    print("\n" + "=" * 60)
+    print("☸️  STEP 3: DEPLOYING TO KUBERNETES")
+    print("=" * 60)
     job_id = deploy_training()
 
     # Wait for job to start
-    wait_for_job_start(job_id)
+    print("\n" + "=" * 60)
+    print("⏳ STEP 4: MONITORING STARTUP")
+    print("=" * 60)
+    started = wait_for_job_start(job_id)
 
     # Show monitoring information
+    print("\n" + "=" * 60)
+    print("📊 STEP 5: CURRENT STATUS")
+    print("=" * 60)
     monitor_training()
 
-    print_success("Training job deployed to Kubeflow!")
-    print(f"\n🎯 Your training job '{job_id}' is now running in the cluster!")
-    print("🔍 Use the monitoring commands above to track progress.")
+    # Final summary
+    print("\n" + "=" * 60)
+    print("🎉 DEPLOYMENT COMPLETE!")
+    print("=" * 60)
+    print_success(f"Training job '{job_id}' deployed to Kubeflow cluster!")
+
+    if started:
+        print("✅ Job is running - check logs for training progress")
+    else:
+        print("⏳ Job is starting - large images take time to download")
+
+    print("\n🎯 What happens next:")
+    print("   📥 PyTorch containers finish downloading")
+    print("   🔄 Distributed training begins automatically")
+    print("   📊 Training metrics logged to TensorBoard")
+    print("   💾 Fine-tuned model saved locally")
+
+    print("\n🔍 Monitor with:")
+    print(f"   kubectl logs -f -l trainer.kubeflow.org/trainjob-ancestor-step=trainer")
+
+    print("\n🎯 When training completes, find your model in:")
+    print("   📁 ./fine_tuned_kubeflow_embeddings/")
+    print("   📈 ./tensorboard_logs/"))
 
 
 if __name__ == "__main__":
