@@ -120,7 +120,10 @@ uv run prepare_training_data.py \
     --hard-negatives-per-query 3 \
     --random-negative-ratio 0.3
 
-# 2. Run hybrid embedding training locally
+# 2. Run standalone training locally (recommended for local development)
+uv run standalone_embedding_training.py
+
+# Alternative: Run with Kubeflow wrapper (may have path issues)
 uv run kubeflow_embedding_training.py
 
 # 3. Start TensorBoard for monitoring (in separate terminal)
