@@ -13,7 +13,7 @@ from kubeflow.trainer import (
 )
 
 
-def hybrid_embedding_training(**func_args):
+def hybrid_embedding_training(*args, **func_args):
     """
     Hybrid embedding fine-tuning function for Kubeflow trainer
 
@@ -23,6 +23,12 @@ def hybrid_embedding_training(**func_args):
     3. In-batch negatives via MultipleNegativesRankingLoss
     4. PyTorch distributed training support
     """
+    # Handle both calling styles:
+    # 1. Kubeflow: hybrid_embedding_training({'key': 'value'}) - positional dict
+    # 2. Direct: hybrid_embedding_training(key='value') - keyword args
+    if args and len(args) == 1 and isinstance(args[0], dict):
+        func_args = args[0]  # Use positional dict from Kubeflow
+
     import os
     import torch
     import torch.distributed as dist
@@ -34,7 +40,7 @@ def hybrid_embedding_training(**func_args):
     import logging
     from pathlib import Path
     import json
-    from datetime import datetime
+    from datetime import datetime, timedelta
     from torch.utils.tensorboard import SummaryWriter
 
     # Set up logging
@@ -51,7 +57,7 @@ def hybrid_embedding_training(**func_args):
             # Initialize with longer timeout for hard negative generation
             dist.init_process_group(
                 backend="gloo",
-                timeout=datetime.timedelta(seconds=3600)  # 1 hour timeout instead of 30 minutes
+                timeout=timedelta(seconds=3600)  # 1 hour timeout instead of 30 minutes
             )
             world_size = dist.get_world_size()
             rank = dist.get_rank()
@@ -89,8 +95,21 @@ def hybrid_embedding_training(**func_args):
     if rank == 0:
         logger.info(f"Using device: {device}")
 
-    # Load model
-    model = SentenceTransformer(model_name, device=device)
+    # Load model - use cached version if running in Kubernetes to avoid network calls
+    if os.path.exists("/workspace/cached_model/all-MiniLM-L6-v2") and model_name == "all-MiniLM-L6-v2":
+        model_path = "/workspace/cached_model/all-MiniLM-L6-v2"
+        if rank == 0:
+            logger.info(f"Using cached model from: {model_path}")
+    elif os.path.exists("./cached_model/all-MiniLM-L6-v2") and model_name == "all-MiniLM-L6-v2":
+        model_path = "./cached_model/all-MiniLM-L6-v2"
+        if rank == 0:
+            logger.info(f"Using cached model from: {model_path}")
+    else:
+        model_path = model_name
+        if rank == 0:
+            logger.info(f"Downloading model from Hugging Face: {model_name}")
+
+    model = SentenceTransformer(model_path, device=device)
     if rank == 0:
         logger.info(
             f"Loaded model: {model_name} (dim: {model.get_sentence_embedding_dimension()})"

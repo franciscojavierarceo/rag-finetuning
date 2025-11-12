@@ -225,6 +225,54 @@ EOF
     print_success "KIND cluster is ready!"
 }
 
+# Configure registry accessibility for KIND nodes
+configure_registry_access() {
+    print_status "Configuring registry access for KIND nodes..."
+
+    # Get the registry IP in the KIND network
+    local REGISTRY_IP=$(docker inspect "${LOCAL_REGISTRY_NAME}" | grep '"IPAddress"' | grep -o '[0-9.]*' | head -1)
+
+    if [ -z "$REGISTRY_IP" ]; then
+        print_warning "Could not determine registry IP, attempting fallback configuration..."
+        REGISTRY_IP="172.18.0.5"  # Common KIND network IP for registry
+    fi
+
+    print_status "Configuring nodes to access registry at ${REGISTRY_IP}:5000..."
+
+    # Configure registry access on all KIND nodes
+    for node in ${KIND_CLUSTER_NAME}-control-plane ${KIND_CLUSTER_NAME}-worker ${KIND_CLUSTER_NAME}-worker2; do
+        print_status "Configuring registry access on $node..."
+        docker exec "$node" sh -c "
+            mkdir -p /etc/containerd/certs.d/localhost:${LOCAL_REGISTRY_PORT}
+            cat > /etc/containerd/certs.d/localhost:${LOCAL_REGISTRY_PORT}/hosts.toml << EOF
+server = \"http://${REGISTRY_IP}:5000\"
+
+[host.\"http://${REGISTRY_IP}:5000\"]
+  capabilities = [\"pull\", \"resolve\", \"push\"]
+  skip_verify = true
+EOF
+        " || print_warning "Failed to configure registry on $node"
+    done
+
+    # Restart containerd on all nodes to pick up the new configuration
+    print_status "Restarting containerd on all nodes to apply registry configuration..."
+    for node in ${KIND_CLUSTER_NAME}-control-plane ${KIND_CLUSTER_NAME}-worker ${KIND_CLUSTER_NAME}-worker2; do
+        docker exec "$node" systemctl restart containerd || print_warning "Failed to restart containerd on $node"
+    done
+
+    # Wait for nodes to be ready after containerd restart
+    print_status "Waiting for nodes to be ready after containerd restart..."
+    sleep 10
+    kubectl wait --for=condition=Ready nodes --all --timeout=300s
+
+    # Test registry access from a node
+    if docker exec "${KIND_CLUSTER_NAME}-worker" curl -sf "http://${REGISTRY_IP}:5000/v2/" >/dev/null; then
+        print_success "Registry access configured successfully! Nodes can access registry at ${REGISTRY_IP}:5000"
+    else
+        print_warning "Registry access verification failed, but configuration was applied"
+    fi
+}
+
 # Install Kubeflow Trainer Operator
 install_kubeflow_trainer() {
     print_status "Installing Kubeflow Trainer Operator..."
@@ -345,6 +393,7 @@ main() {
             create_local_registry
             create_kind_config
             create_kind_cluster
+            configure_registry_access
             ;;
         "kubeflow")
             install_kubeflow_trainer
@@ -359,6 +408,7 @@ main() {
             create_local_registry
             create_kind_config
             create_kind_cluster
+            configure_registry_access
             install_kubeflow_trainer
             verify_installation
             show_next_steps
