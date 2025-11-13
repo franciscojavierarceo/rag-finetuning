@@ -4,16 +4,16 @@ from feast import Entity, FeatureView, Field, FileSource, ValueType
 from feast.data_format import ParquetFormat
 from feast.types import Array, Float32, String
 
+# parquet_file_path = "data/wiki_dpr.parquet"
+# parquet_file_path = "data/train-00000-of-00157_sample_with_timestamp.parquet"
+parquet_file_path = "data/train-00000-of-00157_sample_with_timestamp_chunked.parquet"
+
 wiki_passage = Entity(
     name="id",
     join_keys=["id"],
     value_type=ValueType.STRING,
     description="Unique ID of a Wikipedia passage",
 )
-
-#parquet_file_path = "data/wiki_dpr.parquet"
-#parquet_file_path = "data/train-00000-of-00157_sample_with_timestamp.parquet"
-parquet_file_path = "data/train-00000-of-00157_sample_with_timestamp_chunked.parquet"
 
 wiki_dpr_source = FileSource(
     name="wiki_dpr_source",

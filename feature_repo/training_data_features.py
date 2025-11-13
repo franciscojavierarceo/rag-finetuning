@@ -17,7 +17,7 @@ training_sample = Entity(
     name="training_sample_id",
     join_keys=["training_sample_id"],
     value_type=ValueType.STRING,
-    description="Unique ID for each training sample (query-document pair)"
+    description="Unique ID for each training sample (query-document pair)",
 )
 
 # Query entity (for online query embeddings)
@@ -25,7 +25,7 @@ query_entity = Entity(
     name="query_id",
     join_keys=["query_id"],
     value_type=ValueType.STRING,
-    description="Unique ID for queries"
+    description="Unique ID for queries",
 )
 
 # Training pairs data source (offline store)
@@ -33,7 +33,7 @@ training_pairs_source = FileSource(
     name="embedding_training_pairs_source",
     file_format=ParquetFormat(),
     path="data/embedding_training_data.parquet",
-    timestamp_field="event_timestamp"
+    timestamp_field="event_timestamp",
 )
 
 # Training pairs feature view (OFFLINE ONLY)
@@ -45,42 +45,38 @@ embedding_training_pairs = FeatureView(
         Field(
             name="query_text",
             dtype=String,
-            description="Query text (title, question, etc.)"
+            description="Query text (title, question, etc.)",
         ),
         Field(
             name="document_text",
             dtype=String,
-            description="Document text content"
+            description="Document text content",
         ),
         Field(
             name="label",
             dtype=String,
-            description="Label: positive, negative, hard_negative"
+            description="Label: positive, negative, hard_negative",
         ),
         Field(
             name="similarity_score",
             dtype=Float32,
-            description="Similarity score between query and document"
+            description="Similarity score between query and document",
         ),
-        Field(
-            name="query_id",
-            dtype=String,
-            description="Source query identifier"
-        ),
+        Field(name="query_id", dtype=String, description="Source query identifier"),
         Field(
             name="document_id",
             dtype=String,
-            description="Source document identifier"
+            description="Source document identifier",
         ),
         Field(
             name="metadata",
             dtype=String,
-            description="JSON metadata about the training pair"
-        )
+            description="JSON metadata about the training pair",
+        ),
     ],
     online=False,  # Offline only - no need for online serving of training data
     source=training_pairs_source,
-    description="Training pairs for embedding fine-tuning (positive/negative/hard negative)"
+    description="Training pairs for embedding fine-tuning (positive/negative/hard negative)",
 )
 
 # Query embeddings data source (online store for dynamic sampling)
@@ -88,7 +84,7 @@ query_embeddings_source = FileSource(
     name="query_embeddings_source",
     file_format=ParquetFormat(),
     path="data/query_embeddings.parquet",
-    timestamp_field="event_timestamp"
+    timestamp_field="event_timestamp",
 )
 
 # Query embeddings feature view (ONLINE for dynamic sampling)
@@ -97,26 +93,22 @@ query_embeddings_view = FeatureView(
     entities=[query_entity],
     ttl=timedelta(days=7),
     schema=[
-        Field(
-            name="query_text",
-            dtype=String,
-            description="Query text"
-        ),
+        Field(name="query_text", dtype=String, description="Query text"),
         Field(
             name="query_embedding",
             dtype=Array(Float32),
             description="Query embedding vector for similarity search",
             vector_index=True,
             vector_length=384,  # all-MiniLM-L6-v2 dimension
-            vector_search_metric="COSINE"
+            vector_search_metric="COSINE",
         ),
         Field(
             name="query_type",
             dtype=String,
-            description="Type of query (title, question, etc.)"
-        )
+            description="Type of query (title, question, etc.)",
+        ),
     ],
     online=True,  # Online for vector search during dynamic sampling
     source=query_embeddings_source,
-    description="Query embeddings for dynamic hard negative sampling during training"
+    description="Query embeddings for dynamic hard negative sampling during training",
 )
