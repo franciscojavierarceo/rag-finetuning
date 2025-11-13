@@ -6,10 +6,9 @@ the Milvus varchar field maximum length (512 characters).
 """
 
 import pandas as pd
-import numpy as np
-from datetime import datetime
 import argparse
 import os
+
 
 def chunk_text(text, max_chars=380):
     """
@@ -34,11 +33,11 @@ def chunk_text(text, max_chars=380):
 
     for word in words:
         # Check if adding the next word exceeds the character limit
-        potential_chunk = ' '.join(current_chunk_words + [word])
+        potential_chunk = " ".join(current_chunk_words + [word])
         if len(potential_chunk) > max_chars:
             # If the current chunk is valid, save it
             if current_chunk_words:
-                chunk_text = ' '.join(current_chunk_words)
+                chunk_text = " ".join(current_chunk_words)
                 chunks.append(chunk_text)
             # Start a new chunk with the current word
             current_chunk_words = [word]
@@ -47,10 +46,11 @@ def chunk_text(text, max_chars=380):
 
     # Add the last remaining chunk
     if current_chunk_words:
-        chunk_text = ' '.join(current_chunk_words)
+        chunk_text = " ".join(current_chunk_words)
         chunks.append(chunk_text)
 
     return chunks
+
 
 def chunk_parquet_data(input_file, output_file, max_chars=380):
     """
@@ -68,28 +68,30 @@ def chunk_parquet_data(input_file, output_file, max_chars=380):
     print(f"Columns: {list(df.columns)}")
 
     # Check if text column exists
-    if 'text' not in df.columns:
+    if "text" not in df.columns:
         raise ValueError("'text' column not found in the parquet file")
 
     # Check max text length in original data
-    max_text_length = df['text'].str.len().max()
+    max_text_length = df["text"].str.len().max()
     print(f"Maximum text length in original data: {max_text_length}")
 
     # Count how many rows exceed the limit
-    exceeding_rows = (df['text'].str.len() > 512).sum()
+    exceeding_rows = (df["text"].str.len() > 512).sum()
     print(f"Number of rows exceeding 512 characters: {exceeding_rows}")
 
     chunked_data = []
 
     for idx, row in df.iterrows():
-        text = row['text']
+        text = row["text"]
         chunks = chunk_text(text, max_chars)
 
         for chunk_idx, chunk in enumerate(chunks):
             new_row = row.copy()
-            new_row['text'] = chunk
+            new_row["text"] = chunk
             # Create unique ID for each chunk
-            new_row['id'] = f"{row['id']}_{chunk_idx + 1}" if len(chunks) > 1 else row['id']
+            new_row["id"] = (
+                f"{row['id']}_{chunk_idx + 1}" if len(chunks) > 1 else row["id"]
+            )
             chunked_data.append(new_row)
 
     # Create new dataframe
@@ -98,7 +100,7 @@ def chunk_parquet_data(input_file, output_file, max_chars=380):
     print(f"Chunked data shape: {chunked_df.shape}")
 
     # Verify no text exceeds max_chars
-    max_chunked_length = chunked_df['text'].str.len().max()
+    max_chunked_length = chunked_df["text"].str.len().max()
     print(f"Maximum text length after chunking: {max_chunked_length}")
 
     if max_chunked_length > max_chars:
@@ -111,12 +113,26 @@ def chunk_parquet_data(input_file, output_file, max_chars=380):
     print("Chunking complete!")
     return chunked_df
 
+
 def main():
-    parser = argparse.ArgumentParser(description='Chunk parquet data for Feast/Milvus compatibility')
-    parser.add_argument('--input', '-i', required=True, help='Input parquet file path')
-    parser.add_argument('--output', '-o', help='Output parquet file path (default: input_chunked.parquet)')
-    parser.add_argument('--max-chars', '-m', type=int, default=380,
-                       help='Maximum characters per chunk (default: 380)')
+    parser = argparse.ArgumentParser(
+        description="Chunk parquet data for Feast/Milvus compatibility"
+    )
+    parser.add_argument(
+        "--input", "-i", required=True, help="Input parquet file path"
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        help="Output parquet file path (default: input_chunked.parquet)",
+    )
+    parser.add_argument(
+        "--max-chars",
+        "-m",
+        type=int,
+        default=380,
+        help="Maximum characters per chunk (default: 380)",
+    )
 
     args = parser.parse_args()
 
@@ -134,11 +150,14 @@ def main():
 
     try:
         chunk_parquet_data(input_file, output_file, args.max_chars)
-        print(f"\nYou can now update your feature_store.yaml to use: {output_file}")
+        print(
+            f"\nYou can now update your feature_store.yaml to use: {output_file}"
+        )
         return 0
     except Exception as e:
         print(f"Error: {e}")
         return 1
+
 
 if __name__ == "__main__":
     exit(main())

@@ -142,6 +142,10 @@ create_local_registry() {
 create_kind_config() {
     print_status "Creating optimized KIND cluster configuration..."
 
+    # Get absolute path for training outputs
+    TRAINING_OUTPUTS_PATH="$(pwd)/training_outputs"
+    mkdir -p "$TRAINING_OUTPUTS_PATH"
+
     cat <<EOF > kind-config-kubeflow.yaml
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -169,7 +173,13 @@ nodes:
     hostPort: 6006
     protocol: TCP
 - role: worker
+  extraMounts:
+  - hostPath: ${TRAINING_OUTPUTS_PATH}
+    containerPath: /tmp/rag-training-output
 - role: worker
+  extraMounts:
+  - hostPath: ${TRAINING_OUTPUTS_PATH}
+    containerPath: /tmp/rag-training-output
 EOF
 
     print_success "KIND configuration created for distributed training!"
