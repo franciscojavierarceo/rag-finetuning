@@ -62,9 +62,7 @@ embedding_training_pairs = FeatureView(
             dtype=Float32,
             description="Similarity score between query and document",
         ),
-        Field(
-            name="query_id", dtype=String, description="Source query identifier"
-        ),
+        Field(name="query_id", dtype=String, description="Source query identifier"),
         Field(
             name="document_id",
             dtype=String,

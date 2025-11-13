@@ -6,9 +6,7 @@ from feast.types import Array, Float32, String
 
 # parquet_file_path = "data/wiki_dpr.parquet"
 # parquet_file_path = "data/train-00000-of-00157_sample_with_timestamp.parquet"
-parquet_file_path = (
-    "data/train-00000-of-00157_sample_with_timestamp_chunked.parquet"
-)
+parquet_file_path = "data/train-00000-of-00157_sample_with_timestamp_chunked.parquet"
 
 wiki_passage = Entity(
     name="id",
@@ -47,4 +45,3 @@ wiki_passage_feature_view = FeatureView(
     source=wiki_dpr_source,
     description="Content features of Wikipedia passages",
 )
-

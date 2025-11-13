@@ -57,7 +57,7 @@ def hybrid_embedding_training(*args, **func_args):
             # Initialize with longer timeout for hard negative generation
             dist.init_process_group(
                 backend="gloo",
-                timeout=timedelta(seconds=3600)  # 1 hour timeout instead of 30 minutes
+                timeout=timedelta(seconds=3600),  # 1 hour timeout instead of 30 minutes
             )
             world_size = dist.get_world_size()
             rank = dist.get_rank()
@@ -86,9 +86,7 @@ def hybrid_embedding_training(*args, **func_args):
 
     # Only log from rank 0 to avoid duplicate logs
     if rank == 0:
-        logger.info(
-            f"Starting hybrid embedding fine-tuning with args: {func_args}"
-        )
+        logger.info(f"Starting hybrid embedding fine-tuning with args: {func_args}")
 
     # Set device
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -96,11 +94,17 @@ def hybrid_embedding_training(*args, **func_args):
         logger.info(f"Using device: {device}")
 
     # Load model - use cached version if running in Kubernetes to avoid network calls
-    if os.path.exists("/workspace/cached_model/all-MiniLM-L6-v2") and model_name == "all-MiniLM-L6-v2":
+    if (
+        os.path.exists("/workspace/cached_model/all-MiniLM-L6-v2")
+        and model_name == "all-MiniLM-L6-v2"
+    ):
         model_path = "/workspace/cached_model/all-MiniLM-L6-v2"
         if rank == 0:
             logger.info(f"Using cached model from: {model_path}")
-    elif os.path.exists("./cached_model/all-MiniLM-L6-v2") and model_name == "all-MiniLM-L6-v2":
+    elif (
+        os.path.exists("./cached_model/all-MiniLM-L6-v2")
+        and model_name == "all-MiniLM-L6-v2"
+    ):
         model_path = "./cached_model/all-MiniLM-L6-v2"
         if rank == 0:
             logger.info(f"Using cached model from: {model_path}")
@@ -120,9 +124,7 @@ def hybrid_embedding_training(*args, **func_args):
     if rank == 0:
         # Dynamic project directory - works in local, Docker, and Kubernetes environments
         project_dir = (
-            func_args.get("project_dir")
-            or os.environ.get("PROJECT_DIR")
-            or os.getcwd()
+            func_args.get("project_dir") or os.environ.get("PROJECT_DIR") or os.getcwd()
         )
         # Use mounted volume path if running in Kubernetes, otherwise local path
         if os.path.exists("/workspace/outputs"):
@@ -154,9 +156,7 @@ def hybrid_embedding_training(*args, **func_args):
         def __init__(self, data_path, max_samples=None):
             # Load training data from Feast offline store data
             if not os.path.exists(data_path):
-                raise FileNotFoundError(
-                    f"Training data not found at {data_path}"
-                )
+                raise FileNotFoundError(f"Training data not found at {data_path}")
 
             self.df = pd.read_parquet(data_path)
             if max_samples:
@@ -188,15 +188,17 @@ def hybrid_embedding_training(*args, **func_args):
 
     # Use the same dynamic project directory approach
     project_dir = (
-        func_args.get("project_dir")
-        or os.environ.get("PROJECT_DIR")
-        or os.getcwd()
+        func_args.get("project_dir") or os.environ.get("PROJECT_DIR") or os.getcwd()
     )
 
     # Check if we're running in Kubeflow (temporary directory) or locally
     current_dir = os.getcwd()
-    if ("/tmp/" in current_dir or "/T/" in current_dir or
-        "/private/var/folders" in current_dir or "tmp" in current_dir):
+    if (
+        "/tmp/" in current_dir
+        or "/T/" in current_dir
+        or "/private/var/folders" in current_dir
+        or "tmp" in current_dir
+    ):
         # Running in Kubeflow temporary directory - try absolute paths
         potential_paths = [
             f"{project_dir}/{feast_repo_path}/data/embedding_training_data.parquet",
@@ -279,9 +281,7 @@ def hybrid_embedding_training(*args, **func_args):
         )
 
     # Evaluation dataloader (no distributed sampling needed for eval)
-    eval_dataloader = DataLoader(
-        eval_dataset, batch_size=batch_size, shuffle=False
-    )
+    eval_dataloader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=False)
 
     # Training loss - ContrastiveLoss to pull positives closer and push negatives apart
     train_loss = losses.ContrastiveLoss(model=model)
@@ -296,9 +296,9 @@ def hybrid_embedding_training(*args, **func_args):
 
         try:
             # Use smaller sample for faster processing in distributed mode
-            positive_samples = dataset.df[
-                dataset.df["label"] == "positive"
-            ].sample(min(10, len(dataset.df)))  # Reduced from 20 to 10
+            positive_samples = dataset.df[dataset.df["label"] == "positive"].sample(
+                min(10, len(dataset.df))
+            )  # Reduced from 20 to 10
 
             new_hard_negatives = []
 
@@ -313,9 +313,9 @@ def hybrid_embedding_training(*args, **func_args):
                 doc_embs = model.encode(random_docs)
 
                 # Find most similar (but not exact match)
-                similarities = cos_sim(
-                    torch.tensor(query_emb), torch.tensor(doc_embs)
-                )[0]
+                similarities = cos_sim(torch.tensor(query_emb), torch.tensor(doc_embs))[
+                    0
+                ]
 
                 # Get moderately similar documents (potential hard negatives)
                 for i, sim_score in enumerate(similarities):
@@ -338,7 +338,9 @@ def hybrid_embedding_training(*args, **func_args):
                         }
                         new_hard_negatives.append(new_pair)
 
-                        if len(new_hard_negatives) >= 25:  # Reduced from 50 to 25 for faster processing
+                        if (
+                            len(new_hard_negatives) >= 25
+                        ):  # Reduced from 50 to 25 for faster processing
                             break
 
                 if len(new_hard_negatives) >= 25:
@@ -349,28 +351,30 @@ def hybrid_embedding_training(*args, **func_args):
                 new_df = pd.DataFrame(new_hard_negatives)
 
                 # Find oldest hard negatives to replace
-                old_hard_negatives = dataset.df[dataset.df["label"] == "hard_negative"].head(len(new_hard_negatives))
+                old_hard_negatives = dataset.df[
+                    dataset.df["label"] == "hard_negative"
+                ].head(len(new_hard_negatives))
 
                 if len(old_hard_negatives) > 0:
                     # Remove old hard negatives
-                    dataset.df = dataset.df.drop(old_hard_negatives.index).reset_index(drop=True)
+                    dataset.df = dataset.df.drop(old_hard_negatives.index).reset_index(
+                        drop=True
+                    )
                     logger.info(f"Removed {len(old_hard_negatives)} old hard negatives")
 
                 # Add new hard negatives (same count, so dataset size stays constant)
                 dataset.df = pd.concat([dataset.df, new_df], ignore_index=True)
                 del new_df  # Free memory immediately
 
-                logger.info(f"Added {len(new_hard_negatives)} new hard negatives. Dataset size: {len(dataset.df)} (constant)")
+                logger.info(
+                    f"Added {len(new_hard_negatives)} new hard negatives. Dataset size: {len(dataset.df)} (constant)"
+                )
 
                 # Also save to file for persistence
-                updated_path = (
-                    f"{feast_repo_path}/data/embedding_training_data.parquet"
-                )
+                updated_path = f"{feast_repo_path}/data/embedding_training_data.parquet"
                 dataset.df.to_parquet(updated_path, index=False)
 
-                logger.info(
-                    f"Added {len(new_hard_negatives)} new hard negative pairs"
-                )
+                logger.info(f"Added {len(new_hard_negatives)} new hard negative pairs")
 
                 # Log to TensorBoard
                 if writer:
@@ -422,13 +426,12 @@ def hybrid_embedding_training(*args, **func_args):
 
                 # Clear old dataloaders to free memory
                 import gc
+
                 gc.collect()
 
                 if world_size > 1:
-                    train_sampler = (
-                        torch.utils.data.distributed.DistributedSampler(
-                            train_dataset, num_replicas=world_size, rank=rank
-                        )
+                    train_sampler = torch.utils.data.distributed.DistributedSampler(
+                        train_dataset, num_replicas=world_size, rank=rank
                     )
                     train_dataloader = DataLoader(
                         train_dataset,
@@ -483,9 +486,7 @@ def hybrid_embedding_training(*args, **func_args):
                 query_embs = model.encode(queries)
                 doc_embs = model.encode(docs)
 
-                similarities = cos_sim(
-                    torch.tensor(query_embs), torch.tensor(doc_embs)
-                )
+                similarities = cos_sim(torch.tensor(query_embs), torch.tensor(doc_embs))
                 avg_pos_sim = torch.mean(torch.diag(similarities)).item()
                 metrics["positive_similarity"] = avg_pos_sim
 
@@ -499,9 +500,7 @@ def hybrid_embedding_training(*args, **func_args):
                 query_embs = model.encode(queries)
                 doc_embs = model.encode(docs)
 
-                similarities = cos_sim(
-                    torch.tensor(query_embs), torch.tensor(doc_embs)
-                )
+                similarities = cos_sim(torch.tensor(query_embs), torch.tensor(doc_embs))
                 avg_hard_neg_sim = torch.mean(torch.diag(similarities)).item()
                 metrics["hard_negative_similarity"] = avg_hard_neg_sim
 
@@ -515,9 +514,7 @@ def hybrid_embedding_training(*args, **func_args):
                 query_embs = model.encode(queries)
                 doc_embs = model.encode(docs)
 
-                similarities = cos_sim(
-                    torch.tensor(query_embs), torch.tensor(doc_embs)
-                )
+                similarities = cos_sim(torch.tensor(query_embs), torch.tensor(doc_embs))
                 avg_neg_sim = torch.mean(torch.diag(similarities)).item()
                 metrics["negative_similarity"] = avg_neg_sim
 
@@ -529,19 +526,14 @@ def hybrid_embedding_training(*args, **func_args):
                 and "hard_negative_similarity" in metrics
             ):
                 pos_hard_gap = (
-                    metrics["positive_similarity"]
-                    - metrics["hard_negative_similarity"]
+                    metrics["positive_similarity"] - metrics["hard_negative_similarity"]
                 )
                 print(f"📊 Pos-HardNeg Gap: {pos_hard_gap:.4f}")
                 metrics["pos_hard_gap"] = pos_hard_gap
 
-            if (
-                "positive_similarity" in metrics
-                and "negative_similarity" in metrics
-            ):
+            if "positive_similarity" in metrics and "negative_similarity" in metrics:
                 pos_neg_gap = (
-                    metrics["positive_similarity"]
-                    - metrics["negative_similarity"]
+                    metrics["positive_similarity"] - metrics["negative_similarity"]
                 )
                 print(f"📊 Pos-Neg Gap: {pos_neg_gap:.4f}")
                 metrics["pos_neg_gap"] = pos_neg_gap
@@ -563,26 +555,16 @@ def hybrid_embedding_training(*args, **func_args):
             if writer:
                 # Similarity metrics
                 for metric_name, value in metrics.items():
-                    writer.add_scalar(
-                        f"Evaluation/{metric_name}", value, epoch + 1
-                    )
+                    writer.add_scalar(f"Evaluation/{metric_name}", value, epoch + 1)
 
                 # Dataset composition
                 for label, count in label_counts.items():
-                    writer.add_scalar(
-                        f"Dataset/{label}_count", count, epoch + 1
-                    )
+                    writer.add_scalar(f"Dataset/{label}_count", count, epoch + 1)
 
                 # Dataset sizes
-                writer.add_scalar(
-                    "Dataset/Total_Size", len(dataset.df), epoch + 1
-                )
-                writer.add_scalar(
-                    "Dataset/Train_Size", len(train_dataset), epoch + 1
-                )
-                writer.add_scalar(
-                    "Dataset/Eval_Size", len(eval_dataset), epoch + 1
-                )
+                writer.add_scalar("Dataset/Total_Size", len(dataset.df), epoch + 1)
+                writer.add_scalar("Dataset/Train_Size", len(train_dataset), epoch + 1)
+                writer.add_scalar("Dataset/Eval_Size", len(eval_dataset), epoch + 1)
 
             print(f"{'=' * 60}\n")
 
@@ -593,8 +575,16 @@ def hybrid_embedding_training(*args, **func_args):
         print("=" * 60)
 
         # Get positive and negative pairs from FIXED TEST SET for evaluation
-        positive_pairs = [(row['query_text'], row['document_text']) for _, row in test_set.iterrows() if row['label'] == 'positive']
-        negative_pairs = [(row['query_text'], row['document_text']) for _, row in test_set.iterrows() if row['label'] != 'positive']
+        positive_pairs = [
+            (row["query_text"], row["document_text"])
+            for _, row in test_set.iterrows()
+            if row["label"] == "positive"
+        ]
+        negative_pairs = [
+            (row["query_text"], row["document_text"])
+            for _, row in test_set.iterrows()
+            if row["label"] != "positive"
+        ]
 
         metrics = {}
 
@@ -610,8 +600,8 @@ def hybrid_embedding_training(*args, **func_args):
                 np.dot(a, p) / (np.linalg.norm(a) * np.linalg.norm(p))
                 for a, p in zip(pos_anchor_embeddings, pos_positive_embeddings)
             ]
-            metrics['positive_similarity_mean'] = np.mean(pos_similarities)
-            metrics['positive_similarity_std'] = np.std(pos_similarities)
+            metrics["positive_similarity_mean"] = np.mean(pos_similarities)
+            metrics["positive_similarity_std"] = np.std(pos_similarities)
 
         if negative_pairs:
             # Evaluate negative pairs
@@ -625,20 +615,34 @@ def hybrid_embedding_training(*args, **func_args):
                 np.dot(a, n) / (np.linalg.norm(a) * np.linalg.norm(n))
                 for a, n in zip(neg_anchor_embeddings, neg_negative_embeddings)
             ]
-            metrics['negative_similarity_mean'] = np.mean(neg_similarities)
-            metrics['negative_similarity_std'] = np.std(neg_similarities)
+            metrics["negative_similarity_mean"] = np.mean(neg_similarities)
+            metrics["negative_similarity_std"] = np.std(neg_similarities)
 
         # Calculate separation (key metric for embedding quality)
-        if 'positive_similarity_mean' in metrics and 'negative_similarity_mean' in metrics:
-            metrics['similarity_separation'] = metrics['positive_similarity_mean'] - metrics['negative_similarity_mean']
+        if (
+            "positive_similarity_mean" in metrics
+            and "negative_similarity_mean" in metrics
+        ):
+            metrics["similarity_separation"] = (
+                metrics["positive_similarity_mean"]
+                - metrics["negative_similarity_mean"]
+            )
 
             # Overall quality score (0.0 to 1.0)
             # Good embeddings: positive > 0.8, negative < 0.3, separation > 0.5
-            pos_score = min(metrics['positive_similarity_mean'], 1.0) if metrics['positive_similarity_mean'] > 0 else 0.0
-            separation_score = min(metrics['similarity_separation'] / 0.6, 1.0) if metrics['similarity_separation'] > 0 else 0.0
-            metrics['overall_quality_score'] = (pos_score + separation_score) / 2.0
+            pos_score = (
+                min(metrics["positive_similarity_mean"], 1.0)
+                if metrics["positive_similarity_mean"] > 0
+                else 0.0
+            )
+            separation_score = (
+                min(metrics["similarity_separation"] / 0.6, 1.0)
+                if metrics["similarity_separation"] > 0
+                else 0.0
+            )
+            metrics["overall_quality_score"] = (pos_score + separation_score) / 2.0
         else:
-            metrics['overall_quality_score'] = 0.0
+            metrics["overall_quality_score"] = 0.0
 
         return metrics
 
@@ -649,9 +653,7 @@ def hybrid_embedding_training(*args, **func_args):
     if rank == 0:
         # Use dynamic project directory for consistent model saving
         project_dir = (
-            func_args.get("project_dir")
-            or os.environ.get("PROJECT_DIR")
-            or os.getcwd()
+            func_args.get("project_dir") or os.environ.get("PROJECT_DIR") or os.getcwd()
         )
         # Use mounted volume path if running in Kubernetes, otherwise local path
         if os.path.exists("/workspace/outputs"):
@@ -691,22 +693,28 @@ def hybrid_embedding_training(*args, **func_args):
         print(f"   - Batch size: {batch_size}")
         print(f"   - Total epochs: {training_stats['epochs_completed']}")
         print("📊 Training Results:")
-        print(
-            f"   - Hard negative updates: {training_stats['hard_negative_updates']}"
-        )
+        print(f"   - Hard negative updates: {training_stats['hard_negative_updates']}")
         # Display real evaluation metrics
         if final_metrics:
             print("📊 REAL MODEL EVALUATION RESULTS:")
-            if 'positive_similarity_mean' in final_metrics:
-                print(f"   ✅ Positive similarity: {final_metrics['positive_similarity_mean']:.4f} ± {final_metrics.get('positive_similarity_std', 0):.4f}")
-            if 'negative_similarity_mean' in final_metrics:
-                print(f"   ❌ Negative similarity: {final_metrics['negative_similarity_mean']:.4f} ± {final_metrics.get('negative_similarity_std', 0):.4f}")
-            if 'similarity_separation' in final_metrics:
-                print(f"   🎯 Separation: {final_metrics['similarity_separation']:.4f} (higher is better)")
-            print(f"   🏆 Overall Quality Score: {final_metrics.get('overall_quality_score', 0):.4f}/1.0")
+            if "positive_similarity_mean" in final_metrics:
+                print(
+                    f"   ✅ Positive similarity: {final_metrics['positive_similarity_mean']:.4f} ± {final_metrics.get('positive_similarity_std', 0):.4f}"
+                )
+            if "negative_similarity_mean" in final_metrics:
+                print(
+                    f"   ❌ Negative similarity: {final_metrics['negative_similarity_mean']:.4f} ± {final_metrics.get('negative_similarity_std', 0):.4f}"
+                )
+            if "similarity_separation" in final_metrics:
+                print(
+                    f"   🎯 Separation: {final_metrics['similarity_separation']:.4f} (higher is better)"
+                )
+            print(
+                f"   🏆 Overall Quality Score: {final_metrics.get('overall_quality_score', 0):.4f}/1.0"
+            )
 
             # Quality interpretation
-            quality_score = final_metrics.get('overall_quality_score', 0)
+            quality_score = final_metrics.get("overall_quality_score", 0)
             if quality_score >= 0.8:
                 print("   🎉 EXCELLENT: Model shows great embedding quality!")
             elif quality_score >= 0.6:
@@ -758,7 +766,7 @@ REAL EVALUATION METRICS:"""
             logger.info("TensorBoard logging completed with REAL metrics")
 
     # Return real quality score instead of fake score
-    final_score = final_metrics.get('overall_quality_score', 0.0) if rank == 0 else 0.0
+    final_score = final_metrics.get("overall_quality_score", 0.0) if rank == 0 else 0.0
 
     if rank == 0:
         logger.info(f"Real model quality score: {final_score:.4f}/1.0")

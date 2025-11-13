@@ -118,9 +118,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Chunk parquet data for Feast/Milvus compatibility"
     )
-    parser.add_argument(
-        "--input", "-i", required=True, help="Input parquet file path"
-    )
+    parser.add_argument("--input", "-i", required=True, help="Input parquet file path")
     parser.add_argument(
         "--output",
         "-o",
@@ -150,9 +148,7 @@ def main():
 
     try:
         chunk_parquet_data(input_file, output_file, args.max_chars)
-        print(
-            f"\nYou can now update your feature_store.yaml to use: {output_file}"
-        )
+        print(f"\nYou can now update your feature_store.yaml to use: {output_file}")
         return 0
     except Exception as e:
         print(f"Error: {e}")

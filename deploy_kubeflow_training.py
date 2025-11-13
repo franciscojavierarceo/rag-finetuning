@@ -88,7 +88,9 @@ def create_custom_runtime():
 
     try:
         # Check if runtime already exists
-        result = run_command_with_output(["kubectl", "get", "clustertrainingruntime", "rag-torch-distributed"])
+        result = run_command_with_output(
+            ["kubectl", "get", "clustertrainingruntime", "rag-torch-distributed"]
+        )
         if result:
             print_success("Custom runtime already exists")
             return True
@@ -101,16 +103,12 @@ def create_custom_runtime():
         "kind": "ClusterTrainingRuntime",
         "metadata": {
             "name": "rag-torch-distributed",
-            "labels": {
-                "trainer.kubeflow.org/framework": "torch"
-            }
+            "labels": {"trainer.kubeflow.org/framework": "torch"},
         },
         "spec": {
             "mlPolicy": {
                 "numNodes": 1,  # Will be overridden by CustomTrainer num_nodes
-                "torch": {
-                    "numProcPerNode": "auto"
-                }
+                "torch": {"numProcPerNode": "auto"},
             },
             "template": {
                 "metadata": {},
@@ -135,45 +133,45 @@ def create_custom_runtime():
                                                     "env": [
                                                         {
                                                             "name": "PYTHONPATH",
-                                                            "value": "/workspace:$PYTHONPATH"
+                                                            "value": "/workspace:$PYTHONPATH",
                                                         },
                                                         {
                                                             "name": "PROJECT_DIR",
-                                                            "value": "/workspace"
+                                                            "value": "/workspace",
                                                         },
                                                         {
                                                             "name": "TRANSFORMERS_CACHE",
-                                                            "value": "/home/trainer/.cache/huggingface"
+                                                            "value": "/home/trainer/.cache/huggingface",
                                                         },
                                                         {
                                                             "name": "HF_HOME",
-                                                            "value": "/home/trainer/.cache/huggingface"
+                                                            "value": "/home/trainer/.cache/huggingface",
                                                         },
                                                         {
                                                             "name": "TORCH_HOME",
-                                                            "value": "/home/trainer/.cache/torch"
+                                                            "value": "/home/trainer/.cache/torch",
                                                         },
                                                         {
                                                             "name": "XDG_CACHE_HOME",
-                                                            "value": "/home/trainer/.cache"
-                                                        }
+                                                            "value": "/home/trainer/.cache",
+                                                        },
                                                     ],
                                                     "volumeMounts": [
                                                         {
                                                             "name": "training-storage",
-                                                            "mountPath": "/workspace/outputs"
+                                                            "mountPath": "/workspace/outputs",
                                                         }
                                                     ],
                                                     "resources": {
                                                         "requests": {
                                                             "cpu": "2",
-                                                            "memory": "4Gi"
+                                                            "memory": "4Gi",
                                                         },
                                                         "limits": {
                                                             "cpu": "2",
-                                                            "memory": "4Gi"
-                                                        }
-                                                    }
+                                                            "memory": "4Gi",
+                                                        },
+                                                    },
                                                 }
                                             ],
                                             "volumes": [
@@ -181,33 +179,35 @@ def create_custom_runtime():
                                                     "name": "training-storage",
                                                     "persistentVolumeClaim": {
                                                         "claimName": "rag-training-storage"
-                                                    }
+                                                    },
                                                 }
                                             ],
-                                            "restartPolicy": "Never"
-                                        }
+                                            "restartPolicy": "Never",
+                                        },
                                     }
-                                }
-                            }
+                                },
+                            },
                         }
                     ]
-                }
-            }
-        }
+                },
+            },
+        },
     }
 
     # Apply the runtime using kubectl
     import tempfile
     import json
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(custom_runtime, f, indent=2)
         temp_file = f.name
 
     try:
         result = subprocess.run(
             ["kubectl", "apply", "-f", temp_file],
-            capture_output=True, text=True, timeout=30
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if result.returncode == 0:
             print_success("Custom runtime created successfully")
@@ -249,9 +249,7 @@ def check_prerequisites():
         sys.exit(1)
 
     # Check if Kubeflow Trainer is installed
-    result = run_command(
-        "kubectl get crd trainjobs.trainer.kubeflow.org", check=False
-    )
+    result = run_command("kubectl get crd trainjobs.trainer.kubeflow.org", check=False)
     if result.returncode != 0:
         print_error("Kubeflow Trainer is not installed")
         print_error("Run: ./setup-kind-kubeflow.sh kubeflow")
@@ -284,7 +282,9 @@ def build_and_push_image():
     # Check if image already exists in registry
     result = subprocess.run(
         "curl -sf http://localhost:5001/v2/rag-embedding-training/tags/list",
-        shell=True, capture_output=True, text=True
+        shell=True,
+        capture_output=True,
+        text=True,
     )
     if result.returncode == 0 and "latest" in result.stdout:
         print_success("Image already exists in registry - skipping build")
@@ -294,9 +294,7 @@ def build_and_push_image():
     # Build the Docker image
     print_status(f"Building Docker image: {image_name}")
     print(f"🏗️  Running: docker build -t {image_name} .")
-    result = subprocess.run(
-        f"docker build -t {image_name} .", shell=True, text=True
-    )
+    result = subprocess.run(f"docker build -t {image_name} .", shell=True, text=True)
     if result.returncode != 0:
         print_error("Docker build failed")
         sys.exit(1)
@@ -435,9 +433,7 @@ def wait_for_job_start(job_id, timeout_minutes=2):
 
         time.sleep(10)  # Check every 10 seconds
 
-    print(
-        "⚠️ Job may not have started yet. This is normal for large PyTorch images."
-    )
+    print("⚠️ Job may not have started yet. This is normal for large PyTorch images.")
     print("🔍 Check manually with: kubectl get trainjobs -w")
     return False
 

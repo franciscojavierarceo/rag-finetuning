@@ -60,9 +60,7 @@ class TrainingDataPreparer:
                 "similarity_score": 1.0,  # Perfect match
                 "query_id": f"query_{row['id']}",
                 "document_id": row["id"],
-                "metadata": json.dumps(
-                    {"pair_type": "title_text", "source_row": idx}
-                ),
+                "metadata": json.dumps({"pair_type": "title_text", "source_row": idx}),
                 "event_timestamp": datetime.now(),
             }
             positive_pairs.append(pair)
@@ -70,9 +68,7 @@ class TrainingDataPreparer:
         logger.info(f"Created {len(positive_pairs)} positive pairs")
         return positive_pairs
 
-    def create_random_negative_pairs(
-        self, num_negatives: int = None
-    ) -> List[Dict]:
+    def create_random_negative_pairs(self, num_negatives: int = None) -> List[Dict]:
         """Create random negative pairs"""
 
         if num_negatives is None:
@@ -242,9 +238,9 @@ class TrainingDataPreparer:
         logger.info("Creating query embeddings dataset...")
 
         # Get unique queries (titles)
-        unique_queries = self.source_df.dropna(
-            subset=["title"]
-        ).drop_duplicates("title")
+        unique_queries = self.source_df.dropna(subset=["title"]).drop_duplicates(
+            "title"
+        )
 
         queries_data = []
 
