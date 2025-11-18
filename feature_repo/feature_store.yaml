@@ -8,7 +8,7 @@ online_store:
     host: http://127.0.0.1
     port: 19530
     vector_enabled: true
-    embedding_dim: 768
+    embedding_dim: 384
     index_type: IVF_FLAT
     metric_type: COSINE
 
