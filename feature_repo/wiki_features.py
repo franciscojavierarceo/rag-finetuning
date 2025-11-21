@@ -37,11 +37,11 @@ wiki_passage_feature_view = FeatureView(
             dtype=Array(Float32),
             description="vectors",
             vector_index=True,
-            vector_length=768,
+            vector_length=384,
             vector_search_metric="COSINE",
         ),
     ],
-    online=True,
+    online=True,  # Enabled for online vector search with Milvus
     source=wiki_dpr_source,
     description="Content features of Wikipedia passages",
 )

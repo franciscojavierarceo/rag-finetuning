@@ -153,14 +153,29 @@ def hybrid_embedding_training(*args, **func_args):
 
     # Dataset class for Feast training data
     class FeastTrainingDataset(Dataset):
-        def __init__(self, data_path, max_samples=None):
-            # Load training data from Feast offline store data
-            if not os.path.exists(data_path):
-                raise FileNotFoundError(f"Training data not found at {data_path}")
+        def __init__(self, feast_repo_path, max_samples=None, use_feast=True):
+            """
+            Initialize training dataset using Feast offline store or fallback to Parquet.
 
-            self.df = pd.read_parquet(data_path)
-            if max_samples:
-                self.df = self.df.head(max_samples)
+            Args:
+                feast_repo_path: Path to Feast repository
+                max_samples: Maximum number of samples to load
+                use_feast: If True, use Feast offline store; if False, use direct Parquet
+            """
+            self.feast_repo_path = feast_repo_path
+
+            if use_feast:
+                try:
+                    self.df = self._load_from_feast(feast_repo_path, max_samples)
+                    if rank == 0:
+                        logger.info("✅ Successfully loaded training data from Feast offline store")
+                except Exception as e:
+                    if rank == 0:
+                        logger.warning(f"⚠️  Failed to load from Feast: {e}")
+                        logger.info("Falling back to direct Parquet file loading...")
+                    self.df = self._load_from_parquet(feast_repo_path, max_samples)
+            else:
+                self.df = self._load_from_parquet(feast_repo_path, max_samples)
 
             # Filter out any invalid samples
             self.df = self.df.dropna(subset=["query_text", "document_text"])
@@ -171,6 +186,107 @@ def hybrid_embedding_training(*args, **func_args):
                 logger.info("Dataset composition:")
                 for label, count in label_counts.items():
                     logger.info(f"  {label}: {count}")
+
+        def _load_from_feast(self, feast_repo_path, max_samples=None):
+            """Load training data using Feast offline store."""
+            from feast import FeatureStore
+            from datetime import datetime, timedelta
+
+            if rank == 0:
+                logger.info("Loading training data from Feast offline store...")
+
+            # Initialize Feast store
+            store = FeatureStore(repo_path=feast_repo_path)
+
+            # First, we need to get entity IDs for the training data
+            # Load the original parquet file to get entity information
+            parquet_path = os.path.join(feast_repo_path, "data", "embedding_training_data.parquet")
+            if not os.path.exists(parquet_path):
+                raise FileNotFoundError(f"Entity data not found at {parquet_path}")
+
+            # Read the parquet file to get training sample IDs and timestamps
+            entity_df = pd.read_parquet(parquet_path)
+
+            # Create entity DataFrame with proper timestamps for point-in-time correctness
+            if "training_sample_id" not in entity_df.columns:
+                entity_df["training_sample_id"] = range(len(entity_df))
+
+            if "event_timestamp" not in entity_df.columns:
+                # Use current timestamp for all samples if not present
+                entity_df["event_timestamp"] = datetime.now()
+
+            # Select subset if max_samples is specified
+            if max_samples and len(entity_df) > max_samples:
+                entity_df = entity_df.head(max_samples)
+
+            if rank == 0:
+                logger.info(f"Fetching features for {len(entity_df)} training samples...")
+
+            try:
+                # Get historical features from Feast
+                features_df = store.get_historical_features(
+                    entity_df=entity_df[["training_sample_id", "event_timestamp"]],
+                    features=[
+                        "embedding_training_pairs:query_text",
+                        "embedding_training_pairs:document_text",
+                        "embedding_training_pairs:label",
+                        "embedding_training_pairs:similarity_score",
+                    ],
+                ).to_df()
+
+                if rank == 0:
+                    logger.info(f"Successfully retrieved {len(features_df)} features from Feast")
+
+                return features_df
+
+            except Exception as e:
+                if rank == 0:
+                    logger.error(f"Failed to get historical features: {e}")
+                raise
+
+        def _load_from_parquet(self, feast_repo_path, max_samples=None):
+            """Fallback method to load training data directly from Parquet file."""
+            import os
+
+            # Use the same dynamic project directory approach as before
+            project_dir = os.environ.get("PROJECT_DIR") or os.getcwd()
+            current_dir = os.getcwd()
+
+            if (
+                "/tmp/" in current_dir
+                or "/T/" in current_dir
+                or "/private/var/folders" in current_dir
+                or "tmp" in current_dir
+            ):
+                # Running in Kubeflow temporary directory - try absolute paths
+                potential_paths = [
+                    f"{project_dir}/{feast_repo_path}/data/embedding_training_data.parquet",
+                    f"/Users/farceo/dev/rag-finetuning/{feast_repo_path}/data/embedding_training_data.parquet",
+                    "/data/embedding_training_data.parquet",  # Container mount point
+                ]
+                training_data_path = None
+                for path in potential_paths:
+                    if os.path.exists(path):
+                        training_data_path = path
+                        break
+            else:
+                # Running locally - use relative path
+                training_data_path = f"{feast_repo_path}/data/embedding_training_data.parquet"
+
+            if not training_data_path or not os.path.exists(training_data_path):
+                raise FileNotFoundError(
+                    f"Training data not found. Checked paths: {potential_paths if 'potential_paths' in locals() else [f'{feast_repo_path}/data/embedding_training_data.parquet']}. "
+                    f"Please run: uv run prepare_training_data.py first"
+                )
+
+            if rank == 0:
+                logger.info(f"Loading training data from Parquet: {training_data_path}")
+
+            df = pd.read_parquet(training_data_path)
+            if max_samples:
+                df = df.head(max_samples)
+
+            return df
 
         def __len__(self):
             return len(self.df)
@@ -183,47 +299,24 @@ def hybrid_embedding_training(*args, **func_args):
                 label=1.0 if row["label"] == "positive" else 0.0,
             )
 
-    # Load training dataset - use dynamic paths that work in any environment
+    # Load training dataset using Feast integration
     import os
 
-    # Use the same dynamic project directory approach
-    project_dir = (
-        func_args.get("project_dir") or os.environ.get("PROJECT_DIR") or os.getcwd()
-    )
-
-    # Check if we're running in Kubeflow (temporary directory) or locally
-    current_dir = os.getcwd()
-    if (
-        "/tmp/" in current_dir
-        or "/T/" in current_dir
-        or "/private/var/folders" in current_dir
-        or "tmp" in current_dir
-    ):
-        # Running in Kubeflow temporary directory - try absolute paths
-        potential_paths = [
-            f"{project_dir}/{feast_repo_path}/data/embedding_training_data.parquet",
-            f"/Users/farceo/dev/rag-finetuning/{feast_repo_path}/data/embedding_training_data.parquet",
-            "/data/embedding_training_data.parquet",  # Container mount point
-        ]
-        training_data_path = None
-        for path in potential_paths:
-            if os.path.exists(path):
-                training_data_path = path
-                break
-    else:
-        # Running locally - use relative path
-        training_data_path = f"{feast_repo_path}/data/embedding_training_data.parquet"
-
-    if not training_data_path or not os.path.exists(training_data_path):
-        raise FileNotFoundError(
-            f"Training data not found. Checked paths: {potential_paths if 'potential_paths' in locals() else [f'{feast_repo_path}/data/embedding_training_data.parquet']}. "
-            f"Please run: uv run prepare_training_data.py first"
-        )
+    # Option to disable Feast integration for compatibility
+    use_feast = os.environ.get("USE_FEAST_INTEGRATION", "true").lower() == "true"
 
     if rank == 0:
-        logger.info(f"Using training data from: {training_data_path}")
+        if use_feast:
+            logger.info("🎯 Initializing training with Feast offline store integration...")
+        else:
+            logger.info("⚠️  Feast integration disabled, using direct Parquet loading...")
 
-    dataset = FeastTrainingDataset(training_data_path, max_samples)
+    # Initialize dataset with new Feast-enabled constructor
+    dataset = FeastTrainingDataset(
+        feast_repo_path=feast_repo_path,
+        max_samples=max_samples,
+        use_feast=use_feast
+    )
 
     # Create balanced fixed test set for consistent evaluation (never changes)
     test_sets = []

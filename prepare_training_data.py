@@ -216,6 +216,9 @@ class TrainingDataPreparer:
         # Shuffle the dataset
         training_df = training_df.sample(frac=1).reset_index(drop=True)
 
+        # Add Feast-compatible fields for proper integration
+        self._add_feast_compatibility_fields(training_df)
+
         # Save to parquet
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -227,8 +230,33 @@ class TrainingDataPreparer:
         logger.info(f"  - Random negative pairs: {len(negative_pairs)}")
         logger.info(f"  - Hard negative pairs: {len(hard_negative_pairs)}")
         logger.info(f"  - Total pairs: {len(all_pairs)}")
+        logger.info("✅ Feast-compatible fields added for offline store integration")
 
         return training_df
+
+    def _add_feast_compatibility_fields(self, training_df: pd.DataFrame) -> None:
+        """
+        Add fields required for Feast offline store compatibility.
+
+        Adds:
+        - training_sample_id: Unique identifier for each training sample (entity key)
+        - event_timestamp: Timestamp for point-in-time correctness
+        """
+        from datetime import datetime
+
+        # Add training sample IDs (entity key for Feast)
+        training_df["training_sample_id"] = [
+            f"sample_{i}" for i in range(len(training_df))
+        ]
+
+        # Add event timestamps for point-in-time correctness
+        # Use current timestamp for all samples in this dataset
+        current_timestamp = datetime.now()
+        training_df["event_timestamp"] = current_timestamp
+
+        logger.info(f"Added Feast compatibility fields:")
+        logger.info(f"  - training_sample_id: {len(training_df)} unique IDs")
+        logger.info(f"  - event_timestamp: {current_timestamp}")
 
     def create_query_embeddings_dataset(
         self, output_path: str = "feature_repo/data/query_embeddings.parquet"
